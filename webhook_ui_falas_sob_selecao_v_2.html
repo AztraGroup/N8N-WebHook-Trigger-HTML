@@ -1,0 +1,657 @@
+<!doctype html>
+<html lang="pt-BR" data-theme="auto">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Webhook UI — Falas sob Seleção</title>
+  <style>
+    :root{
+      --bg: #f8fafc; --card:#fff; --text:#0f172a; --muted:#64748b; --border:#e2e8f0;
+      --emerald:#059669; --emerald-700:#047857; --navy:#0b1220; --magenta:#cf2e6b;
+      --radius:14px; --radius-sm:10px; --shadow:0 1px 2px rgba(0,0,0,.04), 0 8px 24px rgba(0,0,0,.06);
+      --shadow-sm:0 2px 10px rgba(0,0,0,.06);
+      --font-scale: 1; /* acessibilidade: escala base */
+      --contrast-mult: 1; /* 1 normal, 1.15 alto contraste */
+    }
+    [data-theme="dark"]{ --bg:#0b1220; --card:#0f172a; --text:#e2e8f0; --muted:#94a3b8; --border:#1f2937; --shadow:none }
+    [data-theme="dark"] header{ background:#0f172acc; }
+    [data-contrast="high"]{ --border: #0ea5e9; --emerald:#10b981; --magenta:#f43f5e }
+
+    html,body{height:100%}
+    body{margin:0; background:linear-gradient(to bottom, var(--card), var(--bg)); color:var(--text); font: calc(14px * var(--font-scale)) / 1.4 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, "Helvetica Neue", Arial}
+    a{color:inherit}
+
+    .container{max-width:1200px; margin:0 auto; padding:0 16px}
+    .sr-only{position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0}
+
+    header{position:sticky; top:0; z-index:10; backdrop-filter:saturate(120%) blur(6px); background:#fff8; border-bottom:1px solid var(--border)}
+    header .bar{display:flex; gap:12px; align-items:center; justify-content:space-between; padding:12px 0}
+    h1{margin:0; font-size:calc(20px * var(--font-scale))}
+
+    .pill{padding:10px 14px; border-radius:999px; font-weight:600; border:1px solid transparent; box-shadow:var(--shadow-sm); cursor:pointer}
+    .pill.navy{background:var(--navy); color:#fff}
+    .pill.magenta{background:var(--magenta); color:#fff}
+
+    main{display:grid; grid-template-columns:1fr; gap:16px; padding:24px 0}
+    @media (min-width:1100px){ main{grid-template-columns:2fr 1fr}}
+
+    .card{background:var(--card); border:1px solid color-mix(in oklab, var(--border) calc(100% * var(--contrast-mult)), transparent); border-radius:var(--radius); box-shadow:var(--shadow); padding:16px}
+    .row{display:grid; grid-template-columns:1fr; gap:12px}
+    @media (min-width:720px){ .row.thirds{grid-template-columns:repeat(3,minmax(0,1fr));}}
+    .label{font-size:calc(12px * var(--font-scale)); font-weight:600; margin-bottom:6px}
+    .input, select, textarea{width:100%; border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px 12px; outline:none; background:var(--card); color:var(--text)}
+    .input:focus, select:focus, textarea:focus{box-shadow:0 0 0 3px rgba(14,165,233,.25)}
+    textarea{resize:vertical}
+    .muted{color:var(--muted)}
+
+    .section-title{font-size:calc(16px * var(--font-scale)); font-weight:700; margin-bottom:12px}
+
+    .divider{height:1px; background:var(--border); margin:16px 0}
+
+    .btn{padding:10px 12px; border-radius:var(--radius-sm); border:1px solid var(--border); background:var(--card); color:var(--text); cursor:pointer}
+    .btn:hover{background:color-mix(in oklab, var(--border) 18%, var(--card))}
+    .btn.prim{background:var(--emerald); color:#fff; border-color:transparent}
+    .btn.prim:hover{background:var(--emerald-700)}
+    .btn.small{padding:6px 10px; font-size:calc(12px * var(--font-scale))}
+
+    .gridAuto{display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:12px}
+
+    .toast{position:fixed; left:50%; bottom:18px; transform:translateX(-50%); background:#0f172a; color:#fff; padding:10px 14px; border-radius:999px; box-shadow:var(--shadow); z-index:40}
+
+    .modal{position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.4); z-index:30}
+    .modal.show{display:flex}
+    .modal .box{background:var(--card); color:var(--text); width:min(760px, 92vw); max-height:86vh; overflow:auto; border:1px solid var(--border); border-radius:var(--radius); padding:16px; box-shadow:var(--shadow)}
+
+    .kbd{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; border:1px solid var(--border); border-radius:6px; padding:0 6px; background:color-mix(in oklab, var(--border) 30%, var(--card)); font-size:.85em}
+  </style>
+</head>
+<body>
+  <a class="sr-only" href="#main">Pular para o conteúdo</a>
+  <header aria-label="Barra de ferramentas">
+    <div class="container bar">
+      <h1>Webhook — Gatilho de Criação (UI). Switch no N8N.</h1>
+      <div style="display:flex; gap:10px; align-items:center">
+        <button id="btnSettings" class="pill navy" aria-haspopup="dialog" aria-controls="modalSettings">Configurações</button>
+        <button id="btnSavePreset" class="pill navy">Salvar Preset</button>
+        <button id="btnLoadPreset" class="pill magenta">Carregar Preset</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main" class="container" tabindex="-1">
+    <section class="card" aria-labelledby="sec-trigger-title">
+      <div id="sec-trigger-title" class="section-title">1) Webhook — Gatilho de Criação</div>
+      <p class="muted" style="margin-top:-6px">Esta página coleta os dados e envia ao seu Webhook. O <b>roteamento</b> é decisão do seu nó no <b>N8N</b>.</p>
+
+      <div class="row thirds" role="group" aria-label="Campos básicos">
+        <div>
+          <label class="label" for="tema">Tema</label>
+          <input id="tema" class="input" placeholder="Ex.: Transformação glam" />
+        </div>
+        <div>
+          <label class="label" for="categoria">Categoria</label>
+          <input id="categoria" class="input" placeholder="Ex.: Beleza" />
+        </div>
+        <div>
+          <label class="label" for="estilo">Estilo</label>
+          <input id="estilo" class="input" placeholder="Ex.: Realismo mágico" />
+        </div>
+      </div>
+
+      <div style="display:flex; flex-wrap:wrap; gap:16px; align-items:center; margin-top:16px" role="group" aria-label="Opções de diálogo e voz">
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer" for="dialogo">
+          <input type="checkbox" id="dialogo" /> <span style="font-weight:600">Diálogo</span>
+        </label>
+        <div id="wrapNumChars" style="display:none; align-items:center; gap:8px">
+          <div class="label" style="margin:0">Nº de Personagens</div>
+          <input id="numChars" class="input" style="width:90px" type="number" min="1" max="8" value="2" />
+        </div>
+        <div style="display:flex; align-items:center; gap:8px">
+          <div class="label" style="margin:0">Tonalidade</div>
+          <select id="tonalidade" class="input" aria-label="Tonalidade">
+            <option>Humorístico</option><option>Dramático</option><option>Sério</option><option>Inspirador</option><option>Romântico</option><option>Tenso</option><option>Suave</option>
+          </select>
+        </div>
+        <div id="wrapVozGlobal" style="display:flex; align-items:center; gap:8px">
+          <div class="label" style="margin:0">Voz (global)</div>
+          <select id="vozGlobal" class="input" style="min-width:200px"></select>
+          <button id="btnNewVoiceFromGlobal" class="btn small">Criar Nova Voz</button>
+        </div>
+      </div>
+
+      <div class="divider" role="separator" aria-hidden="true"></div>
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px">
+        <div class="section-title" style="font-size:15px">Campos Personalizáveis</div>
+        <button class="btn" id="btnAddField">Criar Novo Campo</button>
+      </div>
+      <div id="customFields" class="gridAuto" aria-live="polite"></div>
+      <div id="noCustomFields" class="muted">Nenhum campo extra. Clique em "Criar Novo Campo" para adicionar.</div>
+
+      <div id="dialogoArea" class="hidden" aria-live="polite">
+        <div class="divider"></div>
+        <div class="section-title" style="font-size:15px">Falas dos Personagens (mostrar somente se selecionado)</div>
+        <div id="dupWarn" class="muted hidden" style="background:#fffbeb; border:1px solid #fde68a; color:#92400e; padding:8px 10px; border-radius:10px; font-size:12px; margin-bottom:8px">Atenção: vozes repetidas entre personagens selecionados.</div>
+        <div id="dialogues" class="gridAuto"></div>
+      </div>
+
+      <div class="divider"></div>
+      <div class="card" style="padding:12px" aria-labelledby="send-title">
+        <div id="send-title" class="section-title" style="font-size:15px">Envio ao Webhook</div>
+        <p class="muted" id="send-hint">Informe o endpoint do seu N8N (Webhook Node).</p>
+        <div style="display:flex; gap:8px; align-items:center">
+          <div class="label" style="margin:0">Webhook URL</div>
+          <input id="webhookUrl" class="input" placeholder="https://seu-n8n/webhook/entrada" aria-describedby="send-hint" />
+        </div>
+        <div style="display:flex; gap:8px; align-items:center; margin-top:8px">
+          <div class="label" style="margin:0">Gatilho</div>
+          <input id="triggerKey" class="input" placeholder="ex.: criar_projeto, publicar_video" />
+        </div>
+        <div style="display:flex; gap:8px; align-items:center; margin-top:8px">
+          <div class="label" style="margin:0">Método</div>
+          <select id="httpMethod" class="input" style="width:140px"><option>POST</option><option>GET</option></select>
+          <div class="label" style="margin-left:12px; margin-right:0">Timeout (s)</div>
+          <input id="timeoutSecs" type="number" class="input" style="width:120px" value="20" min="5" max="120" />
+        </div>
+        <details class="mt-headers" style="margin-top:10px">
+          <summary class="muted">Cabeçalhos (JSON) — opcional</summary>
+          <textarea id="headersJson" class="input" rows="4" placeholder='{"Authorization":"Bearer ..."}'></textarea>
+        </details>
+        <label style="display:flex; gap:8px; align-items:center; margin-top:8px; cursor:pointer">
+          <input type="checkbox" id="enviarWebhook" /> <span class="muted">Enviar automaticamente ao Webhook</span>
+        </label>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px">
+          <button id="btnGerar" class="btn prim" title="Atalho: Ctrl+Enter">Gerar/Enviar Payload</button>
+          <button id="btnSaveQuick" class="btn">Salvar Estado Rápido</button>
+          <button id="btnLoadQuick" class="btn">Carregar Estado Rápido</button>
+        </div>
+        <p class="muted" style="margin-top:8px">Atalhos: <span class="kbd">Ctrl</span>+<span class="kbd">Enter</span> enviar • <span class="kbd">Alt</span>+<span class="kbd">S</span> abrir configurações • <span class="kbd">/</span> focar Tema</p>
+      </div>
+    </section>
+
+    <aside class="card" aria-live="polite">
+      <div class="section-title">Preview do Payload</div>
+      <pre id="payloadPreview" style="font-size:12px; white-space:pre-wrap; word-break:break-word; background:color-mix(in oklab, var(--border) 22%, var(--card)); border:1px solid var(--border); border-radius:10px; padding:12px; max-height:300px; overflow:auto"></pre>
+      <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap">
+        <button id="btnCopyPayload" class="btn">Copiar Payload</button>
+        <button id="btnDownloadPayload" class="btn">Baixar JSON</button>
+      </div>
+
+      <div class="divider"></div>
+      <div class="section-title">Resposta do Webhook</div>
+      <div class="muted" id="webhookMeta" style="font-size:12px">Sem envio ainda.</div>
+      <pre id="webhookResponse" style="font-size:12px; white-space:pre-wrap; word-break:break-word; background:color-mix(in oklab, var(--border) 22%, var(--card)); border:1px solid var(--border); border-radius:10px; padding:12px; max-height:240px; overflow:auto"></pre>
+      <div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap">
+        <button id="btnCopyResponse" class="btn">Copiar Resposta</button>
+        <button id="btnClearResponse" class="btn">Limpar</button>
+      </div>
+
+      <div class="divider"></div>
+      <div class="section-title">Biblioteca de Vozes</div>
+      <div class="muted" style="margin-bottom:8px">Upload opcional (base64), renomear e excluir. Usado na voz global ou por personagem.</div>
+      <div id="voicesList" class="gridAuto"></div>
+      <button id="btnNewVoice" class="btn" style="width:100%; margin-top:8px">Criar Nova Voz</button>
+    </aside>
+  </main>
+
+  <!-- MODAIS -->
+  <div class="modal" id="modalVoice" role="dialog" aria-modal="true" aria-labelledby="voice-title">
+    <div class="box">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:8px">
+        <h3 id="voice-title" class="section-title">Criar Nova Voz</h3>
+        <button class="btn" data-close="#modalVoice" aria-label="Fechar">Fechar</button>
+      </div>
+      <div class="row">
+        <div>
+          <label class="label" for="nv_name">Nome da voz</label>
+          <input id="nv_name" class="input" placeholder="Ex.: female_silky" />
+        </div>
+        <div>
+          <label class="label" for="nv_file">Arquivo de voz (opcional)</label>
+          <input id="nv_file" type="file" accept="audio/*" />
+        </div>
+      </div>
+      <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:10px">
+        <button class="btn" data-close="#modalVoice">Cancelar</button>
+        <button id="nv_save" class="btn prim">Salvar Voz</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="modalField" role="dialog" aria-modal="true" aria-labelledby="field-title">
+    <div class="box">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:8px">
+        <h3 id="field-title" class="section-title">Criar Novo Campo</h3>
+        <button class="btn" data-close="#modalField" aria-label="Fechar">Fechar</button>
+      </div>
+      <div class="row thirds">
+        <div>
+          <label class="label" for="cf_label">Rótulo</label>
+          <input id="cf_label" class="input" />
+        </div>
+        <div>
+          <label class="label" for="cf_type">Tipo</label>
+          <select id="cf_type" class="input">
+            <option value="text">Texto</option>
+            <option value="textarea">Texto longo</option>
+            <option value="number">Número</option>
+            <option value="checkbox">Checkbox</option>
+            <option value="dropdown">Dropdown</option>
+            <option value="voice">Voz (da biblioteca)</option>
+          </select>
+        </div>
+        <label style="display:flex; gap:8px; align-items:center; align-self:end">
+          <input type="checkbox" id="cf_required" /> Obrigatório
+        </label>
+      </div>
+      <div id="cf_opts_wrap" style="display:none; margin-top:8px">
+        <div class="label">Opções (separadas por vírgula)</div>
+        <input id="cf_options" class="input" placeholder="Ex.: Opção A, Opção B" />
+      </div>
+      <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:10px">
+        <button class="btn" data-close="#modalField">Cancelar</button>
+        <button id="cf_add" class="btn prim">Adicionar</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="modalSettings" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+    <div class="box">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:8px">
+        <h3 id="settings-title" class="section-title">Configurações & Acessibilidade</h3>
+        <button class="btn" data-close="#modalSettings" aria-label="Fechar">Fechar</button>
+      </div>
+      <div class="row thirds">
+        <div>
+          <div class="label">Tema</div>
+          <select id="prefTheme" class="input" aria-label="Tema">
+            <option value="auto">Automático (sistema)</option>
+            <option value="light">Claro</option>
+            <option value="dark">Escuro</option>
+          </select>
+        </div>
+        <div>
+          <div class="label">Contraste</div>
+          <select id="prefContrast" class="input" aria-label="Contraste">
+            <option value="normal">Normal</option>
+            <option value="high">Alto contraste</option>
+          </select>
+        </div>
+        <div>
+          <div class="label">Escala da interface</div>
+          <input id="prefScale" type="range" min="0.9" max="1.3" step="0.05" value="1" class="w100" aria-label="Escala"/>
+        </div>
+      </div>
+      <div style="display:flex; gap:14px; flex-wrap:wrap; margin-top:10px">
+        <label style="display:flex; gap:8px; align-items:center"><input id="prefReduceMotion" type="checkbox"/> Reduzir animações</label>
+        <label style="display:flex; gap:8px; align-items:center"><input id="prefCompact" type="checkbox"/> Layout compacto</label>
+        <label style="display:flex; gap:8px; align-items:center"><input id="prefShortcuts" type="checkbox" checked/> Atalhos de teclado</label>
+        <label style="display:flex; gap:8px; align-items:center"><input id="prefMonoPre" type="checkbox"/> Fonte monoespaçada nos previews</label>
+      </div>
+      <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:12px">
+        <button class="btn" data-close="#modalSettings">Fechar</button>
+        <button id="btnResetPrefs" class="btn">Restaurar padrões</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="modalSavePreset" role="dialog" aria-modal="true" aria-labelledby="save-title">
+    <div class="box">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:8px">
+        <h3 id="save-title" class="section-title">Salvar Preset</h3>
+        <button class="btn" data-close="#modalSavePreset" aria-label="Fechar">Fechar</button>
+      </div>
+      <div class="row">
+        <div>
+          <label class="label" for="sp_name">Nome</label>
+          <input id="sp_name" class="input" placeholder="Ex.: Glow-up 2 personagens" />
+        </div>
+      </div>
+      <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:10px">
+        <button class="btn" data-close="#modalSavePreset">Cancelar</button>
+        <button id="sp_save" class="btn prim">Salvar</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="modalLoadPreset" role="dialog" aria-modal="true" aria-labelledby="load-title">
+    <div class="box">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:8px">
+        <h3 id="load-title" class="section-title">Carregar Preset</h3>
+        <button class="btn" data-close="#modalLoadPreset" aria-label="Fechar">Fechar</button>
+      </div>
+      <div style="display:flex; gap:8px; align-items:center">
+        <input id="lp_search" class="input" placeholder="Buscar pelo nome…" />
+        <label class="btn" style="cursor:pointer">Importar JSON
+          <input id="lp_import" type="file" accept="application/json" style="display:none" />
+        </label>
+      </div>
+      <div id="lp_list" class="gridAuto" style="margin-top:10px"></div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="assertive" style="display:none"></div>
+  <div id="live" class="sr-only" aria-live="polite"></div>
+
+  <script>
+  (function(){
+    const $ = (sel, el=document) => el.querySelector(sel);
+    const $$ = (sel, el=document) => Array.from(el.querySelectorAll(sel));
+    const uid = () => Math.random().toString(36).slice(2,10);
+    const nowISO = () => new Date().toISOString();
+
+    const LS_VOICES = 'aztra_voices_v1';
+    const LS_PRESETS = 'aztra_presets_v2';
+    const LS_QUICK = 'aztra_preset_v1';
+    const LS_PREFS = 'aztra_prefs_v1';
+    const LS_LAST_RESP = 'aztra_last_response_v1';
+
+    const defaultVoices = [
+      { id: uid(), name: 'female_warm', src: null },
+      { id: uid(), name: 'female_bright', src: null },
+      { id: uid(), name: 'male_deep', src: null },
+      { id: uid(), name: 'narrator_soft', src: null }
+    ];
+
+    const state = {
+      tema:'', categoria:'', estilo:'', dialogo:false, numChars:2, tonalidade:'Humorístico',
+      triggerKey:'',
+      vozGlobal:'', enviarWebhook:false, webhookUrl:'', httpMethod:'POST', timeoutSecs:20, headersJson:'',
+      voices:[],
+      dialogues:[
+        {id:uid(), name:'Personagem 1', text:'', voiceId:'', active:false},
+        {id:uid(), name:'Personagem 2', text:'', voiceId:'', active:false}
+      ],
+      customFields:[]
+    };
+
+    const prefs = {
+      theme:'auto', contrast:'normal', scale:1, reduceMotion:false, compact:false, shortcuts:true, monoPre:false
+    };
+
+    // Utils
+    const toast = (msg)=>{ const t=$('#toast'); t.textContent=msg; t.style.display='block'; clearTimeout(t._to); t._to=setTimeout(()=> t.style.display='none', 3000) }
+    const live = (msg)=>{ $('#live').textContent=''; setTimeout(()=> $('#live').textContent=msg, 10); }
+    const fileToBase64 = (file)=> new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(file);});
+
+    // Prefs
+    function loadPrefs(){ try{ Object.assign(prefs, JSON.parse(localStorage.getItem(LS_PREFS)||'{}')); }catch{} applyPrefs(); }
+    function savePrefs(){ try{ localStorage.setItem(LS_PREFS, JSON.stringify(prefs)); }catch{} }
+    function applyPrefs(){
+      document.documentElement.setAttribute('data-theme', prefs.theme==='auto'? (matchMedia('(prefers-color-scheme: dark)').matches? 'dark':'light') : prefs.theme);
+      document.documentElement.setAttribute('data-contrast', prefs.contrast==='high'? 'high':'normal');
+      document.documentElement.style.setProperty('--font-scale', prefs.scale);
+      document.body.style.letterSpacing = prefs.contrast==='high'? '0.2px':'normal';
+      document.body.style.setProperty('--contrast-mult', prefs.contrast==='high'? '1.15':'1');
+      document.body.classList.toggle('reduce-motion', !!prefs.reduceMotion);
+      document.body.classList.toggle('compact', !!prefs.compact);
+      const preStyle = prefs.monoPre? 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace' : '';
+      $$('#payloadPreview, #webhookResponse').forEach(p=> p.style.fontFamily = preStyle);
+      $('#prefTheme') && ($('#prefTheme').value=prefs.theme);
+      $('#prefContrast') && ($('#prefContrast').value=prefs.contrast);
+      $('#prefScale') && ($('#prefScale').value=prefs.scale);
+      $('#prefReduceMotion') && ($('#prefReduceMotion').checked=prefs.reduceMotion);
+      $('#prefCompact') && ($('#prefCompact').checked=prefs.compact);
+      $('#prefShortcuts') && ($('#prefShortcuts').checked=prefs.shortcuts);
+      $('#prefMonoPre') && ($('#prefMonoPre').checked=prefs.monoPre);
+    }
+
+    // Voices
+    function loadVoices(){ try{ const raw=localStorage.getItem(LS_VOICES); state.voices = raw? JSON.parse(raw): defaultVoices; }catch{ state.voices = defaultVoices; } }
+    function saveVoices(){ try{ localStorage.setItem(LS_VOICES, JSON.stringify(state.voices)); }catch{} }
+
+    function renderVoicesOptions(selectEl, value){ selectEl.innerHTML = '<option value="">— Selecionar —</option>' + state.voices.map(v=>`<option value="${v.id}">${v.name}</option>`).join(''); if (value) selectEl.value=value; }
+    function renderGlobalVoice(){ const sel=$('#vozGlobal'); renderVoicesOptions(sel, state.vozGlobal); }
+
+    function renderVoicesLibrary(){ const wrap = $('#voicesList'); wrap.innerHTML=''; state.voices.forEach(v=>{ const card=document.createElement('div'); card.className='card'; card.style.padding='12px'; card.innerHTML = `
+        <div style="display:flex; justify-content:space-between; gap:8px; align-items:center">
+          <input class="input" value="${v.name}" data-voice-name="${v.id}" aria-label="Renomear voz ${v.name}" />
+          <button class="btn small" data-voice-del="${v.id}">Excluir</button>
+        </div>
+        ${v.src? `<audio controls style="width:100%; margin-top:8px"><source src="${v.src}"></audio>`: '<div class="muted" style="margin-top:6px; font-size:12px">Sem áudio anexado.</div>'}
+      `; wrap.appendChild(card); });
+      $$('input[data-voice-name]').forEach(inp=>{
+        inp.addEventListener('input', ()=>{ const id=inp.getAttribute('data-voice-name'); const v=state.voices.find(x=>x.id===id); if(v){ v.name=inp.value; saveVoices(); renderAll(); }});
+      });
+      $$('button[data-voice-del]').forEach(btn=>{
+        btn.addEventListener('click', ()=>{ const id=btn.getAttribute('data-voice-del'); state.voices = state.voices.filter(x=>x.id!==id); if(state.vozGlobal===id) state.vozGlobal=''; state.dialogues = state.dialogues.map(d=> d.voiceId===id? {...d, voiceId:''}: d); saveVoices(); renderAll(); });
+      });
+    }
+
+    // Dialogue UI (fala aparece somente se selecionado)
+    function renderDialogues(){ const area=$('#dialogoArea'); const wrap=$('#dialogues'); const wrapNum=$('#wrapNumChars');
+      area.classList.toggle('hidden', !state.dialogo);
+      wrapNum.style.display = state.dialogo? 'flex':'none';
+      wrap.innerHTML='';
+      const n = Math.max(1, Number(state.numChars)||1);
+      if (state.dialogues.length < n){ for(let i=0;i<n-state.dialogues.length;i++){ state.dialogues.push({id:uid(), name:`Personagem ${state.dialogues.length+1}`, text:'', voiceId:'', active:false}); }}
+      if (state.dialogues.length > n){ state.dialogues = state.dialogues.slice(0,n); }
+
+      const ids = state.dialogues.filter(x=>x.active).map(d=>d.voiceId).filter(Boolean);
+      const hasDup = new Set(ids).size !== ids.length;
+      $('#dupWarn').classList.toggle('hidden', !hasDup);
+
+      state.dialogues.forEach((d, idx)=>{
+        const card=document.createElement('div'); card.className='card'; card.style.padding='12px';
+        card.innerHTML = `
+          <div style="display:flex; gap:8px; margin-bottom:8px">
+            <input class="input" value="${d.name}" data-dname="${d.id}" placeholder="Personagem ${idx+1}" aria-label="Nome do personagem ${idx+1}"/>
+          </div>
+          <label style="display:flex; gap:8px; align-items:center; margin-bottom:8px">
+            <input type="checkbox" data-dactive="${d.id}" ${d.active? 'checked':''}/> Este personagem fala
+          </label>
+          <div data-dfields="${d.id}" style="${d.active? '':'display:none'}">
+            <div style="display:flex; gap:8px; margin-bottom:8px; align-items:center">
+              <div class="label" style="margin:0">Voz</div>
+              <select class="input" data-dvoice="${d.id}"></select>
+              <button class="btn small" data-open="#modalVoice">Nova voz</button>
+            </div>
+            <label class="sr-only" for="dtext_${d.id}">Fala do personagem ${idx+1}</label>
+            <textarea id="dtext_${d.id}" class="input" rows="4" data-dtext="${d.id}" placeholder="Escreva a fala aqui..."></textarea>
+          </div>
+        `;
+        wrap.appendChild(card);
+        const nameInp = document.querySelector(`[data-dname="${d.id}"]`); nameInp.addEventListener('input', ()=>{ d.name=nameInp.value; renderPayload(); });
+        const activeChk = document.querySelector(`[data-dactive="${d.id}"]`); activeChk.addEventListener('change', ()=>{ d.active=activeChk.checked; const fields = document.querySelector(`[data-dfields="${d.id}"]`); fields.style.display = d.active? 'block':'none'; if(!d.active){ d.text=''; d.voiceId=''; } renderPayload(); renderDialogues(); });
+        const textArea = document.querySelector(`[data-dtext="${d.id}"]`); textArea.value = d.text; textArea.addEventListener('input', ()=>{ d.text=textArea.value; renderPayload(); });
+        const voiceSel = document.querySelector(`[data-dvoice="${d.id}"]`); renderVoicesOptions(voiceSel, d.voiceId); voiceSel.addEventListener('change', ()=>{ d.voiceId=voiceSel.value; renderPayload(); renderDialogues(); });
+      });
+    }
+
+    // Custom fields
+    function renderCustomFields(){ const wrap=$('#customFields'); const empty=$('#noCustomFields'); wrap.innerHTML=''; empty.style.display = state.customFields.length? 'none':'block';
+      state.customFields.forEach(cf=>{
+        const card=document.createElement('div'); card.className='card'; card.style.padding='12px';
+        card.innerHTML = `
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:6px; margin-bottom:8px">
+            <div style="font-size:13px; font-weight:700">${cf.label} <span class="muted" style="font-size:11px; font-weight:600">(${cf.type}) ${cf.required? '*':''}</span></div>
+            <div style="display:flex; gap:6px">
+              <button class="btn small" data-up="${cf.id}">↑</button>
+              <button class="btn small" data-down="${cf.id}">↓</button>
+              <button class="btn small" data-del="${cf.id}">Excluir</button>
+            </div>
+          </div>
+          <div data-field="${cf.id}"></div>
+        `;
+        wrap.appendChild(card);
+        const host=document.querySelector(`[data-field="${cf.id}"]`);
+        if (cf.type==='text'){
+          host.innerHTML = `<input class="input" value="${cf.value||''}" aria-label="${cf.label}"/>`;
+          host.querySelector('input').addEventListener('input', (e)=>{ cf.value=e.target.value; renderPayload(); });
+        } else if (cf.type==='textarea'){
+          host.innerHTML = `<textarea rows="3" class="input" aria-label="${cf.label}">${cf.value||''}</textarea>`;
+          host.querySelector('textarea').addEventListener('input', (e)=>{ cf.value=e.target.value; renderPayload(); });
+        } else if (cf.type==='number'){
+          host.innerHTML = `<input type="number" class="input" value="${cf.value??''}" aria-label="${cf.label}"/>`;
+          host.querySelector('input').addEventListener('input', (e)=>{ cf.value=e.target.value; renderPayload(); });
+        } else if (cf.type==='checkbox'){
+          host.innerHTML = `<label style="display:flex; gap:8px; align-items:center"><input type="checkbox" ${cf.value? 'checked':''}/> ${cf.label}</label>`;
+          host.querySelector('input').addEventListener('change', (e)=>{ cf.value=e.target.checked; renderPayload(); });
+        } else if (cf.type==='dropdown'){
+          const opts = (cf.options||[]).map(o=>`<option ${cf.value===o?'selected':''}>${o}</option>`).join('');
+          host.innerHTML = `<select class="input" aria-label="${cf.label}"><option value="">— Selecione —</option>${opts}</select>`;
+          host.querySelector('select').addEventListener('change', (e)=>{ cf.value=e.target.value; renderPayload(); });
+        } else if (cf.type==='voice'){
+          host.innerHTML = `<select class="input" aria-label="${cf.label}"></select>`;
+          const sel = host.querySelector('select'); renderVoicesOptions(sel, cf.value||''); sel.addEventListener('change', (e)=>{ cf.value=e.target.value; renderPayload(); });
+        }
+        document.querySelector(`[data-del="${cf.id}"]`).addEventListener('click', ()=>{ state.customFields = state.customFields.filter(x=>x.id!==cf.id); renderCustomFields(); renderPayload(); });
+        document.querySelector(`[data-up="${cf.id}"]`).addEventListener('click', ()=>{ moveField(cf.id, 'up'); });
+        document.querySelector(`[data-down="${cf.id}"]`).addEventListener('click', ()=>{ moveField(cf.id, 'down'); });
+      });
+    }
+    function moveField(id, dir){ const i = state.customFields.findIndex(f=>f.id===id); if(i<0) return; const j = dir==='up'? i-1: i+1; if(j<0||j>=state.customFields.length) return; const arr=[...state.customFields]; [arr[i],arr[j]]=[arr[j],arr[i]]; state.customFields=arr; renderCustomFields(); }
+
+    // Payload
+    function buildPayload(){
+      const custom = state.customFields.map(f=> ({ id:f.id, label:f.label, type:f.type, required:!!f.required, value: (f.value!==undefined? f.value : (f.type==='checkbox'? false: '')), options: f.options||undefined }));
+      const activeCount = state.dialogues.filter(d=>d.active).length;
+      const intent = state.dialogo ? (activeCount >= 2 ? 'dialogue' : 'monologue') : 'text_only';
+      return {
+        version:'2.3.0',
+        timestamp: nowISO(),
+        client:{ app:'webhook_ui', page_version:'falas-selecao-2.3.0' },
+        trigger:{
+          tema: state.tema,
+          categoria: state.categoria,
+          estilo: state.estilo,
+          tonalidade: state.tonalidade,
+          gatilho: state.triggerKey,
+          dialogo: state.dialogo,
+          personagens: state.dialogo? state.dialogues.filter(d=>d.active).map(d=> ({ id:d.id, nome:d.name.trim()||'Personagem', fala:d.text.trim(), voz: d.voiceId? (()=>{ const v=state.voices.find(vv=>vv.id===d.voiceId); return v? {id:v.id, name:v.name}: null; })(): null })) : [],
+          voz_global: !state.dialogo && state.vozGlobal? (()=>{ const v=state.voices.find(vv=>vv.id===state.vozGlobal); return v? {id:v.id, name:v.name}: null; })(): null,
+          custom_fields: custom,
+          intent_hint: intent
+        }
+      };
+    }
+
+    function renderPayload(){ $('#payloadPreview').textContent = JSON.stringify(buildPayload(), null, 2); }
+
+    // Bind inputs
+    $('#tema').addEventListener('input', e=>{ state.tema=e.target.value; renderPayload(); });
+    $('#categoria').addEventListener('input', e=>{ state.categoria=e.target.value; renderPayload(); });
+    $('#estilo').addEventListener('input', e=>{ state.estilo=e.target.value; renderPayload(); });
+    $('#tonalidade').addEventListener('change', e=>{ state.tonalidade=e.target.value; renderPayload(); });
+    $('#dialogo').addEventListener('change', e=>{ state.dialogo=e.target.checked; $('#wrapVozGlobal').style.display = state.dialogo? 'none':'flex'; renderDialogues(); renderPayload(); });
+    $('#numChars').addEventListener('input', e=>{ state.numChars=e.target.value; renderDialogues(); renderPayload(); });
+    $('#vozGlobal').addEventListener('change', e=>{ state.vozGlobal=e.target.value; renderPayload(); });
+    $('#webhookUrl').addEventListener('input', e=> state.webhookUrl=e.target.value);
+    $('#triggerKey').addEventListener('input', e=> state.triggerKey=e.target.value);
+    $('#httpMethod').addEventListener('change', e=> state.httpMethod=e.target.value);
+    $('#timeoutSecs').addEventListener('input', e=> state.timeoutSecs=Number(e.target.value||20));
+    $('#headersJson').addEventListener('input', e=> state.headersJson=e.target.value);
+    $('#enviarWebhook').addEventListener('change', e=> state.enviarWebhook=e.target.checked);
+
+    // Send / Generate
+    async function sendToWebhook(){
+      if (!state.tema.trim()) return toast('Preencha o campo Tema.');
+      if (!state.categoria.trim()) return toast('Preencha o campo Categoria.');
+      if (!state.estilo.trim()) return toast('Preencha o campo Estilo.');
+      if (state.dialogo){
+        const actives = state.dialogues.filter(d=>d.active);
+        if (actives.length===0) return toast('Selecione ao menos um personagem com fala.');
+        if (!actives.every(d=> !!d.voiceId)) return toast('Selecione uma voz para cada personagem selecionado.');
+        if (!actives.every(d=> d.text.trim().length>0)) return toast('Preencha a fala de cada personagem selecionado.');
+        const ids = actives.map(d=>d.voiceId).filter(Boolean); const dup = new Set(ids).size !== ids.length; if (dup) return toast('Use vozes diferentes para cada personagem selecionado.');
+      }
+      const payload = buildPayload();
+      renderPayload();
+      if (!state.enviarWebhook){ toast('Payload gerado. Copie abaixo.'); return; }
+      if (!state.webhookUrl.trim()) return toast('Informe a URL do Webhook.');
+
+      let headers = {'Content-Type':'application/json'};
+      if (state.headersJson.trim()){
+        try{ Object.assign(headers, JSON.parse(state.headersJson)); }
+        catch(e){ return toast('Cabeçalhos inválidos (JSON).'); }
+      }
+
+      const controller = new AbortController();
+      const tm = setTimeout(()=> controller.abort(), Math.max(5, state.timeoutSecs)*1000);
+      let status = '...'; let ok=false; let text='';
+      $('#webhookMeta').textContent = 'Enviando…'; $('#webhookResponse').textContent='';
+      try{
+        const init = {method: state.httpMethod, headers, signal: controller.signal};
+        if (state.httpMethod==='POST'){ init.body = JSON.stringify(payload); }
+        const res = await fetch(state.webhookUrl, init);
+        ok = res.ok; status = res.status + ' ' + res.statusText;
+        const ct = res.headers.get('content-type')||'';
+        if (ct.includes('application/json')){ const data = await res.json(); text = JSON.stringify(data, null, 2); }
+        else { text = await res.text(); }
+        clearTimeout(tm);
+      }catch(err){ status = 'ERRO'; text = String(err.message||err); clearTimeout(tm); }
+
+      const meta = `Status: ${status} • ${new Date().toLocaleString()}`;
+      $('#webhookMeta').textContent = meta;
+      $('#webhookResponse').textContent = text;
+      live('Resposta recebida');
+      try{ localStorage.setItem(LS_LAST_RESP, JSON.stringify({meta, text})); }catch{}
+      toast(ok? 'Envio concluído.':'Falha no envio.');
+    }
+
+    $('#btnGerar').addEventListener('click', sendToWebhook);
+    document.addEventListener('keydown', (e)=>{
+      if (prefs.shortcuts && e.key==='Enter' && (e.ctrlKey||e.metaKey)){ e.preventDefault(); sendToWebhook(); }
+      if (prefs.shortcuts && e.key==='/' && !e.metaKey && !e.ctrlKey){ e.preventDefault(); $('#tema').focus(); }
+      if (prefs.shortcuts && (e.altKey && (e.key==='s' || e.key==='S'))){ e.preventDefault(); $('#modalSettings').classList.add('show'); $('#prefTheme').focus(); }
+    });
+
+    // Copy & Download
+    $('#btnCopyPayload').addEventListener('click', async ()=>{ try{ await navigator.clipboard.writeText($('#payloadPreview').textContent); toast('Payload copiado!'); }catch{ toast('Não foi possível copiar.'); }});
+    $('#btnDownloadPayload').addEventListener('click', ()=>{ const blob=new Blob([$('#payloadPreview').textContent], {type:'application/json'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='payload_'+Date.now()+'.json'; a.click(); URL.revokeObjectURL(url); });
+    $('#btnCopyResponse').addEventListener('click', async ()=>{ try{ await navigator.clipboard.writeText($('#webhookResponse').textContent); toast('Resposta copiada!'); }catch{ toast('Não foi possível copiar.'); }});
+    $('#btnClearResponse').addEventListener('click', ()=>{ $('#webhookMeta').textContent='Sem envio ainda.'; $('#webhookResponse').textContent=''; localStorage.removeItem(LS_LAST_RESP); });
+
+    // Quick preset
+    $('#btnSaveQuick').addEventListener('click', ()=>{ try{ localStorage.setItem(LS_QUICK, JSON.stringify({ ...state })); toast('Estado rápido salvo.'); }catch{ toast('Falha ao salvar.'); } });
+    $('#btnLoadQuick').addEventListener('click', ()=>{ try{ const raw=localStorage.getItem(LS_QUICK); if(!raw) return toast('Nenhum estado rápido salvo.'); const p=JSON.parse(raw); Object.assign(state, { ...p }); renderAll(); toast('Estado rápido carregado.'); }catch{ toast('Falha ao carregar.'); } });
+
+    // Field Builder modal
+    $('#btnAddField').addEventListener('click', ()=>{ $('#modalField').classList.add('show'); $('#cf_label').value=''; $('#cf_type').value='text'; $('#cf_required').checked=false; $('#cf_options').value=''; $('#cf_opts_wrap').style.display='none'; });
+    $('#cf_type').addEventListener('change', (e)=> $('#cf_opts_wrap').style.display = e.target.value==='dropdown'? 'block':'none');
+    $('#cf_add').addEventListener('click', ()=>{ const label=$('#cf_label').value.trim(); if(!label) return toast('Informe um rótulo.'); const type=$('#cf_type').value; const required=$('#cf_required').checked; const options= type==='dropdown'? $('#cf_options').value.split(',').map(s=>s.trim()).filter(Boolean): undefined; state.customFields=[{id:uid(), label, type, required, options, value: type==='checkbox'? false:''}, ...state.customFields]; $('#modalField').classList.remove('show'); renderCustomFields(); renderPayload(); toast('Campo criado.'); });
+
+    // Voices modal
+    $('#btnNewVoice').addEventListener('click', ()=>{ $('#modalVoice').classList.add('show'); $('#nv_name').value=''; $('#nv_file').value=''; });
+    $('#btnNewVoiceFromGlobal').addEventListener('click', ()=>{ $('#modalVoice').classList.add('show'); $('#nv_name').value=''; $('#nv_file').value=''; });
+    $('#nv_save').addEventListener('click', async ()=>{ const name = $('#nv_name').value.trim(); if(!name) return toast('Dê um nome para a voz.'); let src=null; const f=$('#nv_file').files[0]; if(f){ try{ src=await fileToBase64(f);}catch{ return toast('Falha ao carregar arquivo.'); }} state.voices=[{id:uid(), name, src}, ...state.voices]; saveVoices(); $('#modalVoice').classList.remove('show'); renderAll(); toast('Voz criada.'); });
+
+    // Presets: salvar/carregar/exportar/importar
+    const readPresets=()=>{ try{ const raw=localStorage.getItem(LS_PRESETS); return raw? JSON.parse(raw): []; }catch{ return []; } }
+    const writePresets=(list)=>{ try{ localStorage.setItem(LS_PRESETS, JSON.stringify(list)); }catch{} }
+    $('#btnSavePreset').addEventListener('click', ()=>{ $('#sp_name').value=''; $('#modalSavePreset').classList.add('show'); });
+    $('#sp_save').addEventListener('click', ()=>{ const name=$('#sp_name').value.trim(); if(!name) return toast('Dê um nome ao preset.'); const lightVoices = state.voices.map(({id,name})=>({id,name})); const data={ tema:state.tema, categoria:state.categoria, estilo:state.estilo, dialogo:state.dialogo, numChars:state.numChars, tonalidade:state.tonalidade, vozId:state.vozGlobal, dialogues:state.dialogues, customFields:state.customFields, voices:lightVoices, triggerKey:state.triggerKey }; const list=readPresets(); const exists=list.find(p=> p.name.toLowerCase()===name.toLowerCase()); if(exists){ if(!confirm('Já existe um preset com esse nome. Substituir?')) return; exists.data=data; exists.updatedAt=nowISO(); writePresets(list); } else { list.unshift({id:uid(), name, data, createdAt:nowISO()}); writePresets(list);} $('#modalSavePreset').classList.remove('show'); toast('Preset salvo.'); });
+    function renderPresetsList(){ const list=readPresets(); const q=$('#lp_search').value.toLowerCase(); const host=$('#lp_list'); host.innerHTML=''; list.filter(p=> p.name.toLowerCase().includes(q)).forEach(p=>{ const card=document.createElement('div'); card.className='card'; card.style.padding='12px'; card.innerHTML = `
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:6px">
+            <div><div style="font-weight:700">${p.name}</div><div class="muted" style="font-size:12px">${new Date(p.createdAt||p.updatedAt||Date.now()).toLocaleString()}</div></div>
+            <div style="display:flex; gap:6px"><button class="btn small" data-load="${p.id}">Carregar</button><button class="btn small" data-export="${p.id}">Exportar</button><button class="btn small" data-delpreset="${p.id}">Excluir</button></div>
+          </div>
+          <pre style="font-size:11px; background:color-mix(in oklab, var(--border) 22%, var(--card)); border:1px solid var(--border); border-radius:10px; padding:8px; max-height:140px; overflow:auto">${JSON.stringify(p.data, null, 2)}</pre>`; host.appendChild(card); }); $$('button[data-load]').forEach(btn=> btn.onclick = ()=>{ const id=btn.getAttribute('data-load'); const p=readPresets().find(x=>x.id===id); if(!p) return; const d=p.data; Object.assign(state,{ tema:d.tema||'', categoria:d.categoria||'', estilo:d.estilo||'', dialogo:!!d.dialogo, numChars:d.numChars||2, tonalidade:d.tonalidade||'Humorístico', vozGlobal:d.vozId||'', dialogues: (d.dialogues?.length? d.dialogues: state.dialogues).map(x=>({...x, active: !!x.active})), customFields: Array.isArray(d.customFields)? d.customFields: [], triggerKey:d.triggerKey||'' }); $('#modalLoadPreset').classList.remove('show'); renderAll(); toast('Preset carregado: '+p.name); }); $$('button[data-export]').forEach(btn=> btn.onclick = ()=>{ const id=btn.getAttribute('data-export'); const p=readPresets().find(x=>x.id===id); if(!p) return; const blob=new Blob([JSON.stringify(p,null,2)], {type:'application/json'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='preset_'+p.name.replace(/\s+/g,'_')+'.json'; a.click(); URL.revokeObjectURL(url); }); $$('button[data-delpreset]').forEach(btn=> btn.onclick = ()=>{ const id=btn.getAttribute('data-delpreset'); if(!confirm('Excluir este preset?')) return; const list=readPresets().filter(x=>x.id!==id); writePresets(list); renderPresetsList(); toast('Preset excluído.'); }); }
+    $('#btnLoadPreset').addEventListener('click', ()=>{ $('#modalLoadPreset').classList.add('show'); renderPresetsList(); });
+    $('#lp_search').addEventListener('input', renderPresetsList);
+    $('#lp_import').addEventListener('change', async (e)=>{ const f=e.target.files[0]; if(!f) return; try{ const text=await f.text(); const preset=JSON.parse(text); if(!preset?.id||!preset?.name||!preset?.data) return toast('Arquivo inválido.'); const list=readPresets(); list.unshift(preset); writePresets(list); renderPresetsList(); toast('Preset importado.'); }catch{ toast('Falha ao importar.'); } });
+
+    // Settings modal
+    $('#btnSettings').addEventListener('click', ()=>{ $('#modalSettings').classList.add('show'); applyPrefs(); $('#prefTheme').focus(); });
+    $('#prefTheme').addEventListener('change', (e)=>{ prefs.theme=e.target.value; applyPrefs(); savePrefs(); });
+    $('#prefContrast').addEventListener('change', (e)=>{ prefs.contrast=e.target.value; applyPrefs(); savePrefs(); });
+    $('#prefScale').addEventListener('input', (e)=>{ prefs.scale=parseFloat(e.target.value||1); applyPrefs(); savePrefs(); });
+    $('#prefReduceMotion').addEventListener('change', (e)=>{ prefs.reduceMotion=e.target.checked; applyPrefs(); savePrefs(); });
+    $('#prefCompact').addEventListener('change', (e)=>{ prefs.compact=e.target.checked; applyPrefs(); savePrefs(); });
+    $('#prefShortcuts').addEventListener('change', (e)=>{ prefs.shortcuts=e.target.checked; applyPrefs(); savePrefs(); });
+    $('#prefMonoPre').addEventListener('change', (e)=>{ prefs.monoPre=e.target.checked; applyPrefs(); savePrefs(); });
+    $('#btnResetPrefs').addEventListener('click', ()=>{ Object.assign(prefs, {theme:'auto', contrast:'normal', scale:1, reduceMotion:false, compact:false, shortcuts:true, monoPre:false}); applyPrefs(); savePrefs(); toast('Preferências restauradas.'); });
+
+    // modal close
+    document.addEventListener('click', (e)=>{ const closeSel = e.target.getAttribute('data-close'); if(closeSel){ $(closeSel).classList.remove('show'); }});
+    document.addEventListener('keydown', (e)=>{ if(e.key==='Escape'){ $$('.modal.show').forEach(m=> m.classList.remove('show')); }});
+
+    // Render helpers
+    function renderAll(){ renderGlobalVoice(); $('#wrapVozGlobal').style.display = state.dialogo? 'none':'flex'; $('#dialogo').checked = state.dialogo; $('#numChars').value = state.numChars; $('#tema').value=state.tema; $('#categoria').value=state.categoria; $('#estilo').value=state.estilo; $('#tonalidade').value=state.tonalidade; $('#triggerKey').value=state.triggerKey; $('#httpMethod').value=state.httpMethod; $('#timeoutSecs').value=state.timeoutSecs; $('#headersJson').value=state.headersJson; renderDialogues(); renderCustomFields(); renderVoicesLibrary(); renderPayload(); }
+
+    try{ const last=JSON.parse(localStorage.getItem(LS_LAST_RESP)||'null'); if(last){ $('#webhookMeta').textContent=last.meta; $('#webhookResponse').textContent=last.text; } }catch{}
+
+    loadPrefs(); loadVoices(); renderAll();
+  })();
+  </script>
+</body>
+</html>
